@@ -20,6 +20,7 @@ class Preproc(object):
         resize: tup(int width, int height): resize shape
         crop: tup(int width, int height): crop shape
     """
+
     def __init__(self, resize):
         self.resize = resize
 
@@ -57,7 +58,7 @@ class MVTEC_with_val(data.Dataset):
         self.root = root
         self.preproc = preproc
         self.set = set
-        self.resize=resize
+        self.resize = resize
 
         if set == 'train':
             self.ids = list()
@@ -134,7 +135,7 @@ class MVTEC_with_val(data.Dataset):
     def eval(self, eval_dir):
         summary_file = open(os.path.join(eval_dir, 'summary.txt'), 'w')
         for item in self.test_dict:
-            s_map_all=torch.load(eval_dir + '/' + item + '/' + 's_map.pth')
+            s_map_all = torch.load(eval_dir + '/' + item + '/' + 's_map.pth')
             summary_file.write('--------------{}--------------\n'.format(item))
             labels = list()
             paccs = list()
@@ -171,7 +172,7 @@ class MVTEC_with_val(data.Dataset):
                         labels.append(0)
 
                         type_ious.append(cal_iou(mask, gt))
-                        type_bad_index+=(1-cal_good_index(mask,400))
+                        type_bad_index += (1 - cal_good_index(mask, 400))
                         gt_re_list.append(gt.reshape(self.resize[0] * self.resize[1], 1))
                         num_bad += 1
 
@@ -197,10 +198,10 @@ class MVTEC_with_val(data.Dataset):
             s_map_all = np.array(s_map_all).reshape(-1, 1)
 
             gt_re = np.array(gt_re_list)
-            gt_re = gt_re.reshape(-1,1)
-            for threshold in np.arange(0,1,0.005):
-                FPR_list.append(cal_FPR(s_map_all, gt_re,threshold))
-                TPR_list.append(cal_TPR(s_map_all, gt_re,threshold))
+            gt_re = gt_re.reshape(-1, 1)
+            for threshold in np.arange(0, 1, 0.005):
+                FPR_list.append(cal_FPR(s_map_all, gt_re, threshold))
+                TPR_list.append(cal_TPR(s_map_all, gt_re, threshold))
 
             auc = cal_AUC(TPR_list, FPR_list)
             plt.figure()
@@ -209,17 +210,21 @@ class MVTEC_with_val(data.Dataset):
             acc_good = type_good_index / num_good
             acc_bad = type_bad_index / num_bad
             log_file.write('--------------------------\n')
-            log_file.write('Total mean IoU:{:.2f}\n'.format(mIoU*100))
-            log_file.write('Total mean Pixel Accuracy:{:.2f}\n'.format(mPAc*100))
+            log_file.write('Total mean IoU:{:.2f}\n'.format(mIoU * 100))
+            log_file.write('Total mean Pixel Accuracy:{:.2f}\n'.format(mPAc * 100))
             log_file.write('AUC of defect samples: {:.2f}\n'.format(auc * 100))
             log_file.write('acc of good samples: {:.2f}\n'.format(acc_good * 100))
-            log_file.write('acc of bad samples: {:.2f}\n'.format(acc_bad*100))
-            summary_file.write('mIoU:{:.2f}     mPAcc:{:.2f}    auc:{:.2f}  acc_good:{:.2f}  acc_bad:{:.2f}\n'.format(mIoU*100, mPAc*100,auc*100,acc_good*100,acc_bad*100))
+            log_file.write('acc of bad samples: {:.2f}\n'.format(acc_bad * 100))
+            summary_file.write(
+                'mIoU:{:.2f}     mPAcc:{:.2f}    auc:{:.2f}  acc_good:{:.2f}  acc_bad:{:.2f}\n'.format(mIoU * 100,
+                                                                                                       mPAc * 100,
+                                                                                                       auc * 100,
+                                                                                                       acc_good * 100,
+                                                                                                       acc_bad * 100))
 
             log_file.write('\n')
             log_file.close()
             pass
-
 
 
 class MVTEC(data.Dataset):
@@ -231,11 +236,11 @@ class MVTEC(data.Dataset):
         preproc(callable, optional): pre-procession on the input image
     """
 
-    def __init__(self, root, set,resize, preproc=None):
+    def __init__(self, root, set, resize, preproc=None):
         self.root = root
         self.preproc = preproc
         self.set = set
-        self.resize=resize
+        self.resize = resize
 
         if set == 'train':
             self.ids = list()
@@ -308,7 +313,7 @@ class MVTEC(data.Dataset):
             min_defect_area_dict[item] = min(min_defect_area_list)
 
         for item in self.test_dict:
-            s_map_all=torch.load(eval_dir + '/' + item + '/' + 's_map.pth')
+            s_map_all = torch.load(eval_dir + '/' + item + '/' + 's_map.pth')
             s_map_good_all = torch.load(eval_dir + '/' + item + '/' + 's_map_good.pth')
             summary_file.write('--------------{}--------------\n'.format(item))
             labels = list()
@@ -322,7 +327,7 @@ class MVTEC(data.Dataset):
             FPR_list = list()
             TPR_list = list()
             gt_re_list = list()
-            gt_re_good_list=list()
+            gt_re_good_list = list()
             gt_dir = os.path.join(self.root, item, 'ground_truth')
             res_dir = os.path.join(eval_dir, item, 'mask')
             log_file = open(os.path.join(eval_dir, item, 'result.txt'), 'w')
@@ -342,7 +347,7 @@ class MVTEC(data.Dataset):
                         gt = cv2.cvtColor(gt, cv2.COLOR_BGR2GRAY)
                         mask = cv2.cvtColor(mask, cv2.COLOR_BGR2GRAY)
                         _, gt = cv2.threshold(gt, 1, 255, cv2.THRESH_BINARY)
-                        gt=cv2.resize(gt,self.resize)
+                        gt = cv2.resize(gt, self.resize)
                         gt_defect_area = (gt == 255)
                         gt_defect_sum = float(gt_defect_area.sum())
                         min_defect_area_list.append(gt_defect_sum)
@@ -351,7 +356,7 @@ class MVTEC(data.Dataset):
                         labels.append(0)
 
                         type_ious.append(cal_iou(mask, gt))
-                        type_bad_index += (1-cal_good_index(mask,min_defect_area_dict[item]))
+                        type_bad_index += (1 - cal_good_index(mask, min_defect_area_dict[item]))
                         gt_re_list.append(gt.reshape(-1, 1))
                         num_bad += 1
 
@@ -375,11 +380,11 @@ class MVTEC(data.Dataset):
 
             s_map_all = np.array(s_map_all).reshape(-1, 1)
             gt_re = np.array(gt_re_list)
-            gt_re = gt_re.reshape(-1,1)
+            gt_re = gt_re.reshape(-1, 1)
             threshold_set = np.hstack((np.arange(0, 0.8, 0.01), np.arange(0.8, 1, 0.005)))
             for threshold in threshold_set:
-                FPR_list.append(cal_FPR(s_map_all, gt_re,threshold))
-                TPR_list.append(cal_TPR(s_map_all, gt_re,threshold))
+                FPR_list.append(cal_FPR(s_map_all, gt_re, threshold))
+                TPR_list.append(cal_TPR(s_map_all, gt_re, threshold))
             TPR_list.append(1)
             FPR_list.append(1)
 
@@ -393,12 +398,17 @@ class MVTEC(data.Dataset):
             acc_good = type_good_index / num_good
             acc_bad = type_bad_index / num_bad
             log_file.write('--------------------------\n')
-            log_file.write('Total mean IoU:{:.2f}\n'.format(mIoU*100))
-            log_file.write('Total mean Pixel Accuracy:{:.2f}\n'.format(mPAc*100))
+            log_file.write('Total mean IoU:{:.2f}\n'.format(mIoU * 100))
+            log_file.write('Total mean Pixel Accuracy:{:.2f}\n'.format(mPAc * 100))
             log_file.write('AUC of defect samples: {:.2f}\n'.format(auc * 100))
             log_file.write('acc of good samples: {:.2f}\n'.format(acc_good * 100))
-            log_file.write('acc of bad samples: {:.2f}\n'.format(acc_bad*100))
-            summary_file.write('mIoU:{:.2f}     mPAcc:{:.2f}    auc:{:.2f}  acc_good:{:.2f}  acc_bad:{:.2f}\n'.format(mIoU*100, mPAc*100,auc*100,acc_good*100,acc_bad*100))
+            log_file.write('acc of bad samples: {:.2f}\n'.format(acc_bad * 100))
+            summary_file.write(
+                'mIoU:{:.2f}     mPAcc:{:.2f}    auc:{:.2f}  acc_good:{:.2f}  acc_bad:{:.2f}\n'.format(mIoU * 100,
+                                                                                                       mPAc * 100,
+                                                                                                       auc * 100,
+                                                                                                       acc_good * 100,
+                                                                                                       acc_bad * 100))
 
             log_file.write('\n')
             log_file.close()

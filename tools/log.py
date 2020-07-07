@@ -8,7 +8,7 @@ def get_sys_date():
 
 class Log:
     def __init__(self, log_dir, cfg_name):
-        if os.path.exists(log_dir) is not True:
+        if not os.path.exists(log_dir):
             os.mkdir(log_dir)
         date = get_sys_date()
         f_name = '{}_{}.txt'.format(date, cfg_name)
