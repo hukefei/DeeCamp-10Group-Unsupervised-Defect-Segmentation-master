@@ -18,7 +18,7 @@
     },
     "db": {
         "name": "mvtec",
-        "data_dir": "/data/sdv2/normal_based/focusight1_round1_train_part1/mvtec",
+        "data_dir": "/data/sdv2/normal_based/focusight1_round1_train_part2/mvtec",
         "loader_threads": 4,
         "train_split": "train",
         "use_validation_set": false,
@@ -33,6 +33,6 @@
         "resume_path": "",
         "finetune": false,
         "finetune_path": "",
-        "save_dir": "./weights/SSIM1"
+        "save_dir": "./weights/SSIM2"
     }
 }

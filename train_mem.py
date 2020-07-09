@@ -5,6 +5,7 @@ from db import training_collate
 from tools import Timer, Log
 from factory import *
 from datetime import datetime
+from torch.utils import data
 
 
 def parse_args():
@@ -66,57 +67,48 @@ if __name__ == '__main__':
         trainer.load_params(configs['system']['resume_path'])
     print('Model: {} has been loaded'.format(configs['model']['name']))
 
+    train_loader = data.DataLoader(training_set, batch_size=batch_size, shuffle=True, num_workers=8,
+                                   pin_memory=True)
     # start training
-    epoch_size = len(training_set) // batch_size  # init learning rate & iters
-    start_iter = start_epoch * epoch_size
-    max_iter = max_epoch * epoch_size
     print('Start training...')
-    epoch = 0
-    iters_steps = [epoch_step*epoch_size for epoch_step in epoch_steps]
-    for iteration in range(start_iter, max_iter):
-        # reset batch iterator
-        if iteration % epoch_size == 0:
-            batch_iterator = iter(torch.utils.data.DataLoader(training_set, batch_size, shuffle=True,
-                                                              num_workers=loader_threads, collate_fn=training_collate))
-            # save parameters
-            if epoch % snapshot == 0 and iteration > start_iter:
-                save_name = '{}-{:d}.pth'.format(args.cfg, epoch)
-                save_path = os.path.join(save_dir, save_name)
-                trainer.save_params(save_path)
-            epoch += 1
+    iteration = 0
+    epoch_size = len(training_set) // batch_size
+    for epoch in range(max_epoch):
+        # save parameters
+        if epoch % snapshot == 0 and epoch > 0:
+            save_name = '{}-{:d}.pth'.format(args.cfg, epoch)
+            save_path = os.path.join(save_dir, save_name)
+            trainer.save_params(save_path)
+        epoch += 1
 
         # adjust learning rate
-        step_index = len(iters_steps)
-        for k, step in enumerate(iters_steps):
-            if iteration < step:
-                step_index = k
-                break
+        step_index = 0
+        for step in epoch_steps:
+            if epoch >= step:
+                step_index += 1
         lr = adjust_learning_rate(trainer, learning_rate, decay_rate, epoch, step_index, iteration, epoch_size)
 
-        # load data
-        _t.tic()
-        images = next(batch_iterator)
-        if configs['model']['type'] == 'Encoder':
-            trainer.train(images)
-        elif configs['model']['type'] == 'GAN':
-            # Update Discriminator
-            trainer.train(images, phase='discriminate')
-            # Update Generator
-            trainer.train(images, phase='generate')
-        else:
-            raise Exception("Wrong model type!")
-        batch_time = _t.toc()
+        for seq, sample in enumerate(train_loader):
+            iteration += 1
+            # load data
+            _t.tic()
+            normals, query, target = sample.values()
+            if configs['model']['type'] == 'MEM':
+                trainer.train(normals, query, target)
+            else:
+                raise Exception("Wrong model type!")
+            batch_time = _t.toc()
 
-        # print message
-        if iteration % 10 == 0:
-            _t.clear()
-            mes = 'Epoch:' + repr(epoch) + '||epochiter: ' + repr(iteration % epoch_size) + '/' + repr(epoch_size)
-            mes += '||Totel iter: ' + repr(iteration)
-            mes += '||{}'.format(trainer.get_loss_message())
-            mes += '||LR: %.8f' % (lr)
-            mes += '||Batch time: %.4f sec.' % batch_time
-            log.wr_mes(mes)
-            print(mes)
+            # print message
+            if iteration % 10 == 0:
+                _t.clear()
+                mes = 'Epoch:' + repr(epoch) + '||epochiter: ' + repr(iteration % epoch_size) + '/' + repr(epoch_size)
+                mes += '||Totel iter: ' + repr(iteration)
+                mes += '||{}'.format(trainer.get_loss_message())
+                mes += '||LR: %.8f' % (lr)
+                mes += '||Batch time: %.4f sec.' % batch_time
+                log.wr_mes(mes)
+                print(mes)
     save_name = '{}-{:d}.pth'.format(args.cfg, epoch)
     save_path = os.path.join(save_dir, save_name)
     trainer.save_params(save_path)

@@ -5,6 +5,7 @@ from .mvtec import MVTEC, MVTEC_with_val
 from .mvtec import Preproc as MVTEC_pre
 from .chip import CHIP
 from .chip import Preproc as CHIP_pre
+from .memory_db import Memory
 
 
 def training_collate(batch):

@@ -56,7 +56,7 @@ class Encoder_M(nn.Module):
         # self.conv1_o = nn.Conv2d(1, 64, kernel_size=7, stride=2, padding=3, bias=False)
 
         resnet = models.resnet50(pretrained=True)
-        self.conv1 = resnet.conv1
+        self.conv1 = nn.Conv2d(1, 64, kernel_size=7, stride=2, padding=3, bias=False)
         self.bn1 = resnet.bn1
         self.relu = resnet.relu  # 1/2, 64
         self.maxpool = resnet.maxpool
@@ -65,32 +65,15 @@ class Encoder_M(nn.Module):
         self.res3 = resnet.layer2  # 1/8, 512
         self.res4 = resnet.layer3  # 1/8, 1024
 
-        self.register_buffer('mean', torch.FloatTensor([0.485, 0.456, 0.406]).view(1, 3, 1, 1))
-        self.register_buffer('std', torch.FloatTensor([0.229, 0.224, 0.225]).view(1, 3, 1, 1))
-
-        # self.weight_x = torch.ones(1, 64, 120, 216)
-        # self.weight_x[0, 13, :, :] = torch.tensor(2.0)
-        # self.weight_x[0, 14, :, :] = torch.tensor(2.0)
-        # self.weight_x[0, 20, :, :] = torch.tensor(2.0)
-        # self.weight_x[0, 31, :, :] = torch.tensor(2.0)
-        # self.weight_x[0, 33, :, :] = torch.tensor(2.0)
-        # self.weight_x[0, 35, :, :] = torch.tensor(1.5)
-        # self.weight_x[0, 56, :, :] = torch.tensor(1.5)
-        # self.weight_x = self.weight_x.cuda()
+        self.register_buffer('mean', torch.FloatTensor([0.485]).view(1, 1, 1, 1))
+        self.register_buffer('std', torch.FloatTensor([0.229]).view(1, 1, 1, 1))
 
     def forward(self, in_f):
         f = (in_f - self.mean) / self.std
-        # o = torch.zeros_like(in_m).float()
-        # in_m.shape [1,1,480,864],[b,c,,h,w]
-        # in_m = self.conv1_m(in_m)
-        # x = self.conv1(f) + in_m  # + self.conv1_o(o)
         x = self.conv1(f)
         x = self.bn1(x)
         c1 = self.relu(x)  # 1/2, 64
         x = self.maxpool(c1)  # 1/4, 64
-        # in_m = self.maxpool(self.relu(self.bn1(in_m)))
-        # x = x + x*in_m
-        # x = x*self.weight_x
         r2 = self.res2(x)  # 1/4, 256
         r3 = self.res3(r2)  # 1/8, 512
         r4 = self.res4(r3)  # 1/8, 1024
@@ -101,7 +84,7 @@ class Encoder_Q(nn.Module):
     def __init__(self):
         super(Encoder_Q, self).__init__()
         resnet = models.resnet50(pretrained=True)
-        self.conv1 = resnet.conv1
+        self.conv1 = nn.Conv2d(1, 64, kernel_size=7, stride=2, padding=3, bias=False)
         self.bn1 = resnet.bn1
         self.relu = resnet.relu  # 1/2, 64
         self.maxpool = resnet.maxpool
@@ -110,12 +93,11 @@ class Encoder_Q(nn.Module):
         self.res3 = resnet.layer2  # 1/8, 512
         self.res4 = resnet.layer3  # 1/8, 1024
 
-        self.register_buffer('mean', torch.FloatTensor([0.485, 0.456, 0.406]).view(1, 3, 1, 1))
-        self.register_buffer('std', torch.FloatTensor([0.229, 0.224, 0.225]).view(1, 3, 1, 1))
+        self.register_buffer('mean', torch.FloatTensor([0.456]).view(1, 1, 1, 1))
+        self.register_buffer('std', torch.FloatTensor([0.229]).view(1, 1, 1, 1))
 
     def forward(self, in_f):
         f = (in_f - self.mean) / self.std
-
         x = self.conv1(f)
         x = self.bn1(x)
         c1 = self.relu(x)  # 1/2, 64
@@ -142,14 +124,14 @@ class Refine(nn.Module):
 
 
 class Decoder(nn.Module):
-    def __init__(self, mdim):
+    def __init__(self, indim, mdim):
         super(Decoder, self).__init__()
-        self.convFM = nn.Conv2d(1024, mdim, kernel_size=(3, 3), padding=(1, 1), stride=1)
+        self.convFM = nn.Conv2d(indim, mdim, kernel_size=(3, 3), padding=(1, 1), stride=1)
         self.ResMM = ResBlock(mdim, mdim)
         self.RF3 = Refine(512, mdim)  # 1/8 -> 1/4
         self.RF2 = Refine(256, mdim)  # 1/4 -> 1
 
-        self.pred2 = nn.Conv2d(mdim, 3, kernel_size=(3, 3), padding=(1, 1), stride=1)
+        self.pred2 = nn.Conv2d(mdim, 1, kernel_size=(3, 3), padding=(1, 1), stride=1)
         self.tanh = nn.Tanh()
 
     def forward(self, r4, r3, r2):
@@ -168,7 +150,91 @@ class Decoder(nn.Module):
         p2 = F.interpolate(p2, scale_factor=4, mode='bilinear', align_corners=False)
         p3 = F.interpolate(p3, scale_factor=8, mode='bilinear', align_corners=False)
         p4 = F.interpolate(p4, scale_factor=16, mode='bilinear', align_corners=False)
-        return p2, p3, p4  # , p2, p3, p4
+        return p2# , p2, p3, p4
+
+
+class BNConv(nn.Module):
+    def __init__(self, in_planes, out_planes, kernel_size, stride=1, padding=0, dilation=1, groups=1,
+                 relu=True, bn=True, bias=False):
+        super(BNConv, self).__init__()
+        self.out_channels = out_planes
+        self.conv = nn.Conv2d(in_planes, out_planes, kernel_size=kernel_size, stride=stride, padding=padding,
+                              dilation=dilation, groups=groups, bias=bias)
+        self.bn = nn.BatchNorm2d(out_planes, eps=1e-5, momentum=0.01, affine=True) if bn else None
+        self.relu = nn.ReLU(inplace=True) if relu else None
+
+    def forward(self, x):
+        x = self.conv(x)
+        if self.bn is not None:
+            x = self.bn(x)
+        if self.relu is not None:
+            x = self.relu(x)
+        return x
+
+
+class BNDeConv(nn.Module):
+    def __init__(self, in_planes, out_planes, kernel_size, stride=1, padding=0, out_padding=0, dilation=1, groups=1,
+                 relu=True, bn=True, bias=False, scale_factor=2):
+        super(BNDeConv, self).__init__()
+        self.out_channels = out_planes
+        self.scale_factor = scale_factor
+        self.conv = nn.Conv2d(in_planes, out_planes, kernel_size=kernel_size, stride=stride, padding=padding,
+                              dilation=dilation, groups=groups, bias=bias)
+        # self.conv = nn.ConvTranspose2d(in_planes, out_planes, kernel_size=kernel_size, stride=stride, padding=padding,
+        #                                output_padding=out_padding, dilation=dilation, groups=groups, bias=bias)
+        self.bn = nn.BatchNorm2d(out_planes, eps=1e-5, momentum=0.01, affine=True) if bn else None
+        self.relu = nn.ReLU(inplace=True) if relu else None
+
+    def forward(self, x):
+        x = F.interpolate(x, scale_factor=self.scale_factor, mode='bilinear', align_corners=False)
+        x = self.conv(x)
+        if self.bn is not None:
+            x = self.bn(x)
+        if self.relu is not None:
+            x = self.relu(x)
+        return x
+
+
+class Decoder_2(nn.Module):
+    def __init__(self, code_dim, img_channel):
+        super(Decoder_2, self).__init__()
+        self.deconv1 = BNConv(in_planes=code_dim, out_planes=128, kernel_size=3, stride=1, padding=1, relu=False)
+        self.activation1 = nn.LeakyReLU(inplace=True, negative_slope=0.2)
+        self.deconv2 = BNDeConv(in_planes=128, out_planes=128, kernel_size=3, stride=1, padding=1, relu=False)
+        self.activation2 = nn.LeakyReLU(inplace=True, negative_slope=0.2)
+        self.deconv3 = BNDeConv(in_planes=128, out_planes=128, kernel_size=3, stride=1, padding=1, relu=False)
+        self.activation3 = nn.LeakyReLU(inplace=True, negative_slope=0.2)
+        self.deconv4 = BNConv(in_planes=128, out_planes=128, kernel_size=3, stride=1, padding=1, relu=False)
+        self.activation4 = nn.LeakyReLU(inplace=True, negative_slope=0.2)
+        self.deconv5 = BNDeConv(in_planes=128, out_planes=64, kernel_size=3, stride=1, padding=1, relu=False)
+        self.activation5 = nn.LeakyReLU(inplace=True, negative_slope=0.2)
+        self.deconv6 = BNConv(in_planes=64, out_planes=64, kernel_size=3, stride=1, padding=1, relu=False)
+        self.activation6 = nn.LeakyReLU(inplace=True, negative_slope=0.2)
+        self.deconv7 = BNDeConv(in_planes=64, out_planes=32, kernel_size=3, stride=1, padding=1, relu=False)
+        self.activation7 = nn.LeakyReLU(inplace=True, negative_slope=0.2)
+        self.deconv8 = BNConv(in_planes=32, out_planes=32, kernel_size=3, stride=1, padding=1, relu=False)
+        self.activation8 = nn.LeakyReLU(inplace=True, negative_slope=0.2)
+        # self.deconv9 = BNDeConv(in_planes=32, out_planes=32, kernel_size=3, stride=1, padding=1, relu=False)
+        # self.activation9 = nn.LeakyReLU(inplace=True, negative_slope=0.2)
+        self.deconv10 = BNConv(in_planes=32, out_planes=32, kernel_size=3, stride=1, padding=1, relu=False)
+        self.activation10 = nn.LeakyReLU(inplace=True, negative_slope=0.2)
+        self.deconv11 = BNConv(in_planes=32, out_planes=img_channel, kernel_size=1, stride=1, relu=False)
+        self.activation11 = nn.Sigmoid()
+
+    def forward(self, x):
+        x = self.activation1(self.deconv1(x))
+        x = self.activation2(self.deconv2(x))
+        x = self.activation3(self.deconv3(x))
+        x = self.activation4(self.deconv4(x))
+        x = self.activation5(self.deconv5(x))
+        x = self.activation6(self.deconv6(x))
+        x = self.activation7(self.deconv7(x))
+        x = self.activation8(self.deconv8(x))
+        # x = self.activation9(self.deconv9(x))
+        x = self.activation10(self.deconv10(x))
+        x = self.activation11(self.deconv11(x))
+
+        return x
 
 
 class KeyValue(nn.Module):
@@ -228,7 +294,7 @@ class STM(nn.Module):
         self.KV_Q_r4 = KeyValue(1024, keydim=128, valdim=512)
 
         self.Memory = Memory()
-        self.Decoder = Decoder(256)
+        self.Decoder = Decoder(1024, 256)
 
     def contrust(self, frame, key, value):
         '''
@@ -244,8 +310,8 @@ class STM(nn.Module):
 
         # memory select
         final_value = self.Memory(key, value, curKey, curValue)
-        p_m2, p_m3, p_m4 = self.Decoder(final_value, r3, r2)
-        return p_m2, p_m3, p_m4
+        p_m2 = self.Decoder(final_value, r3, r2)
+        return p_m2
 
     def segment(self, frame, key, value):
         '''
@@ -260,24 +326,8 @@ class STM(nn.Module):
 
         # memory select
         final_value = self.Memory(key, value, curKey, curValue)
-        logits, p_m2, p_m3 = self.Decoder(final_value, r3, r2)  # [b,2,h,w]
-        logits = self.get_logit(logits)
-        p_m2 = self.get_logit(p_m2)
-        p_m3 = self.get_logit(p_m3)
-
-        return logits, p_m2, p_m3
-
-    @staticmethod
-    def get_logit(logits):
-        ps = F.softmax(logits, dim=1)[:, 1]  # B h w
-        B, H, W = ps.shape
-        ps_tmp = torch.unsqueeze(ps, dim=1)  # B,1,H,W
-        em = torch.zeros(B, 2, H, W).cuda()
-        em[:, 0] = torch.prod(1 - ps_tmp, dim=1)
-        em[:, 1] = ps
-        em = torch.clamp(em, 1e-7, 1 - 1e-7)
-        logit = torch.log((em / (1 - em)))
-        return logit
+        logits = self.Decoder(final_value, r3, r2)  # [b,2,h,w]
+        return logits
 
     def memorize(self, curFrame):
         '''

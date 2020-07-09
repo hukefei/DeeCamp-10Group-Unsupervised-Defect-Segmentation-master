@@ -40,7 +40,10 @@ class Preproc(object):
         # image normal
         image = image.astype(np.float32) / 255.
         # normalize_(tile, self.mean, self.std)
-        image = image.transpose((2, 0, 1))
+        if len(image.shape) == 3:
+            image = image.transpose((2, 0, 1))
+        else:
+            image = image[np.newaxis, :, :]
 
         return torch.from_numpy(image)
 
@@ -236,11 +239,13 @@ class MVTEC(data.Dataset):
         preproc(callable, optional): pre-procession on the input image
     """
 
-    def __init__(self, root, set, resize, preproc=None):
+    def __init__(self, root, set, resize, preproc=None, img_channel=3):
         self.root = root
         self.preproc = preproc
         self.set = set
         self.resize = resize
+        self.img_channel = img_channel
+        assert img_channel in (1, 3)
 
         if set == 'train':
             self.ids = list()
@@ -264,8 +269,8 @@ class MVTEC(data.Dataset):
                     img_dir = os.path.join(item_path, set, type)
                     ids = list()
                     for img in os.listdir(img_dir):
-                        if re.search('.png', img) is None:
-                            continue
+                        # if re.search('.png', img) is None:
+                        #     continue
                         ids.append(os.path.join(img_dir, img))
                         self.test_len += 1
                     self.test_dict[_item][type] = ids
@@ -276,7 +281,10 @@ class MVTEC(data.Dataset):
         """Returns training image
         """
         img_path = self.ids[index]
-        img = cv2.imread(img_path, cv2.IMREAD_COLOR)
+        if self.img_channel == 3:
+            img = cv2.imread(img_path, cv2.IMREAD_COLOR)
+        elif self.img_channel == 1:
+            img = cv2.imread(img_path, 0)
 
         if self.preproc is not None:
             img = self.preproc(img)

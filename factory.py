@@ -1,4 +1,5 @@
 import torch
+import torchvision as tv
 
 
 def load_params(net, path):
@@ -8,7 +9,7 @@ def load_params(net, path):
     for k, v in w_dict.items():
         head = k[:7]
         if head == 'module.':
-            name = k[7:] # remove `module.`
+            name = k[7:]  # remove `module.`
         else:
             name = k
         new_state_dict[name] = v
@@ -30,7 +31,9 @@ def load_data_set_from_factory(configs, phase):
                 preproc = None
             else:
                 raise Exception("Invalid phase name")
-            set = MVTEC_with_val(root=configs['db']['data_dir'], resize=tuple(configs['db']['resize']), set=set_name, preproc=preproc)
+            set = MVTEC_with_val(root=configs['db']['data_dir'], resize=tuple(configs['db']['resize']), set=set_name,
+                                 preproc=preproc,
+                                 img_channel=configs['db']['img_channel'])
         elif configs['db']['use_validation_set'] == False:
             from db import MVTEC_pre, MVTEC
             if phase == 'train':
@@ -43,7 +46,9 @@ def load_data_set_from_factory(configs, phase):
                 preproc = None
             else:
                 raise Exception("Invalid phase name")
-            set = MVTEC(root=configs['db']['data_dir'], resize=tuple(configs['db']['resize']), set=set_name, preproc=preproc)####################################
+            set = MVTEC(root=configs['db']['data_dir'], resize=tuple(configs['db']['resize']), set=set_name,
+                        preproc=preproc,
+                        img_channel=configs['db']['img_channel'])  ####################################
         else:
             raise Exception("Invalid input")
     elif configs['db']['name'] == 'chip':
@@ -57,6 +62,27 @@ def load_data_set_from_factory(configs, phase):
         else:
             raise Exception("Invalid phase name")
         set = CHIP(root=configs['db']['data_dir'], set=set_name, preproc=preproc)
+    elif configs['db']['name'] == 'memory':
+        from db import Memory
+        set_name = configs['db']['train_split']
+        transform = tv.transforms.Compose([
+            tv.transforms.Resize(configs['db']['resize']),
+            tv.transforms.Grayscale(),
+            tv.transforms.ToTensor(),
+            tv.transforms.Normalize([0.5], [0.5])
+        ])
+        transform_query = tv.transforms.Compose([
+            tv.transforms.Resize(configs['db']['resize']),
+            # tv.transforms.RandomVerticalFlip(),
+            # tv.transforms.RandomHorizontalFlip(),
+            tv.transforms.RandomResizedCrop(configs['db']['resize'][0], scale=(0.5, 1)),
+            # tv.transforms.ColorJitter(brightness=0.1, contrast=0.1, saturation=0.1),
+            tv.transforms.Grayscale(),
+            tv.transforms.ToTensor(),
+            tv.transforms.Normalize([0.5], [0.5])
+        ])
+        set = Memory(root=configs['db']['data_dir'], set=set_name, transforms=transform,
+                     transforms_query=transform_query)
     else:
         raise Exception("Invalid set name")
 
@@ -64,6 +90,13 @@ def load_data_set_from_factory(configs, phase):
 
 
 def load_training_net_from_factory(configs):
+    if configs['model']['name'] == 'SSIM_Net_upsam':
+        from model.networks import SSIM_Net_upsam
+        net = SSIM_Net_upsam(code_dim=configs['model']['code_dim'], img_channel=configs['model']['img_channel'])
+        optimizer = torch.optim.Adam(net.parameters(), lr=configs['op']['learning_rate'], betas=(0.5, 0.999))
+
+        return net, optimizer
+
     if configs['model']['name'] == 'SSIM_Net':
         from model.networks import SSIM_Net
         net = SSIM_Net(code_dim=configs['model']['code_dim'], img_channel=configs['model']['img_channel'])
@@ -101,7 +134,7 @@ def load_training_net_from_factory(configs):
 
     elif configs['model']['name'] == 'VAE_Net0':
         from model.networks import VAE_Net0
-        net = VAE_Net0(code_dim=configs['model']['code_dim'],phase='train')
+        net = VAE_Net0(code_dim=configs['model']['code_dim'], phase='train')
         optimizer = torch.optim.Adam(net.parameters(), lr=configs['op']['learning_rate'], betas=(0.5, 0.999))
 
         return net, optimizer
@@ -114,6 +147,13 @@ def load_training_net_from_factory(configs):
         optimizerD = torch.optim.Adam(sr_D.parameters(), lr=configs['op']['learning_rate'], betas=(0.5, 0.999))
 
         return sr_G, sr_D, optimizerG, optimizerD
+
+    elif configs['model']['name'] == 'STM':
+        from model.networks import STM
+        net = STM()
+        optimizer = torch.optim.Adam(net.parameters(), lr=configs['op']['learning_rate'], betas=(0.5, 0.999))
+
+        return net, optimizer
     else:
         raise Exception("Invalid model name")
 
@@ -162,6 +202,11 @@ def load_training_model_from_factory(configs, ngpu):
         sr_G, sr_D, optimizerG, optimizerD = load_training_net_from_factory(configs)
         g_loss, d_loss = load_loss_from_factory(configs)
         trainer = Trainer(sr_G, sr_D, g_loss, d_loss, optimizerG, optimizerD, ngpu)
+    elif configs['model']['type'] == 'MEM':
+        from model.mem_trainer import MEM_Trainer
+        net, optimizer = load_training_net_from_factory(configs)
+        loss = load_loss_from_factory(configs)
+        trainer = MEM_Trainer(net, loss, configs['op']['loss'], optimizer, ngpu)
     else:
         raise Exception("Wrong model type!")
 
@@ -175,6 +220,9 @@ def load_test_model_from_factory(configs):
     elif configs['model']['name'] == 'SSIM_Net_lite':
         from model.networks import SSIM_Net_Lite
         net = SSIM_Net_Lite(code_dim=configs['model']['code_dim'], img_channel=configs['model']['img_channel'])
+    elif configs['model']['name'] == 'SSIM_Net_upsam':
+        from model.networks import SSIM_Net_upsam
+        net = SSIM_Net_upsam(code_dim=configs['model']['code_dim'], img_channel=configs['model']['img_channel'])
     elif configs['model']['name'] == 'RED_Net_2skips':
         from model.networks import RED_Net_2skips
         net = RED_Net_2skips(code_dim=configs['model']['code_dim'], img_channel=configs['model']['img_channel'])
@@ -186,10 +234,10 @@ def load_test_model_from_factory(configs):
         net = RED_Net_4skips(code_dim=configs['model']['code_dim'], img_channel=configs['model']['img_channel'])
     elif configs['model']['name'] == 'VAE_Net0':
         from model.networks import VAE_Net0
-        net = VAE_Net0(code_dim=configs['model']['code_dim'],phase='inference')
+        net = VAE_Net0(code_dim=configs['model']['code_dim'], phase='inference')
     elif configs['model']['name'] == 'CascadeSRGAN-4skips':
         from model.networks import CASG_4skips
-        net = CASG_4skips(scale_factor=configs['model']['scale_factor'],img_channel=configs['model']['img_channel'])
+        net = CASG_4skips(scale_factor=configs['model']['scale_factor'], img_channel=configs['model']['img_channel'])
     elif configs['model']['name'] == 'RED_Net_3skips_Pruning':
         from model.networks import RED_Net_3skips_Pruning
         net = RED_Net_3skips_Pruning(code_dim=configs['model']['code_dim'], img_channel=configs['model']['img_channel'])

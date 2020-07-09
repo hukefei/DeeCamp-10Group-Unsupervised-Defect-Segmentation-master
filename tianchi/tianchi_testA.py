@@ -10,17 +10,21 @@ from tools import Timer
 from factory import *
 from db.eval_func import cal_good_index
 import tqdm
+import json
+from datetime import datetime
+import itertools
 
 
 def parse_args():
     parser = argparse.ArgumentParser(description='Object detection base on anchor.')
     parser.add_argument('--cfg', help="Path of config file", type=str, required=True)
-    parser.add_argument('--model_path', help="Path of model", type=str,required=True)
+    parser.add_argument('--model_path', help="Path of model", type=str, required=True)
     parser.add_argument('--gpu_id', help="ID of GPU", type=int, default=0)
     parser.add_argument('--res_dir', help="Directory path of result", type=str, default='./eval_result')
     parser.add_argument('--retest', default=False, type=bool)
 
     return parser.parse_args()
+
 
 def val_mvtec(rebuilder, transform, configs):
     if configs['db']['use_validation_set'] is True:
@@ -58,9 +62,10 @@ def test_mvtec(test_set, rebuilder, transform, save_dir, threshold_seg_dict, con
     cost_time = list()
     if not os.path.exists(os.path.join(save_dir, 'ROC_curve')):
         os.mkdir(os.path.join(save_dir, 'ROC_curve'))
+
     for item in test_set.test_dict:
         s_map_list = list()
-        s_map_good_list=list()
+        s_map_good_list = list()
         item_dict = test_set.test_dict[item]
 
         if not os.path.exists(os.path.join(save_dir, item)):
@@ -68,19 +73,29 @@ def test_mvtec(test_set, rebuilder, transform, save_dir, threshold_seg_dict, con
             os.mkdir(os.path.join(save_dir, item, 'ori'))
             os.mkdir(os.path.join(save_dir, item, 'gen'))
             os.mkdir(os.path.join(save_dir, item, 'mask'))
-            #os.mkdir(os.path.join(save_dir, item))
+            # os.mkdir(os.path.join(save_dir, item))
         for type in item_dict:
             if not os.path.exists(os.path.join(save_dir, item, 'ori', type)):
-                os.mkdir(os.path.join(save_dir, item, 'ori', type))
+                os.makedirs(os.path.join(save_dir, item, 'ori', type))
             if not os.path.exists(os.path.join(save_dir, item, 'gen', type)):
-                os.mkdir(os.path.join(save_dir, item, 'gen', type))
+                os.makedirs(os.path.join(save_dir, item, 'gen', type))
             if not os.path.exists(os.path.join(save_dir, item, 'mask', type)):
-                os.mkdir(os.path.join(save_dir, item, 'mask', type))
+                os.makedirs(os.path.join(save_dir, item, 'mask', type))
+            if not os.path.exists(os.path.join(save_dir, item, 'concat', type)):
+                os.makedirs(os.path.join(save_dir, item, 'concat', type))
+            if not os.path.exists(os.path.join(save_dir, item, 'submit_result', type)):
+                os.makedirs(os.path.join(save_dir, item, 'submit_result', type))
             _time = list()
             img_list = item_dict[type]
             progressbar = tqdm.tqdm(img_list)
+            # count = 0
             for path in progressbar:
-
+                # if count >= 100:
+                #     return 0
+                # else:
+                #     count += 1
+                # path = r'/data/sdv2/normal_based/focusight1_round1_train_part1/mvtec/tianchi/test/TC_images/zzcRTAzGLsu2pcgCXoW1OYY3chIBm2.bmp'
+                test_result = {}
                 # image = cv2.imread(path, cv2.IMREAD_COLOR)
                 # ori_h, ori_w, _ = image.shape
                 image = cv2.imread(path, 0)
@@ -91,27 +106,50 @@ def test_mvtec(test_set, rebuilder, transform, save_dir, threshold_seg_dict, con
                 # re_img = out.transpose((1, 2, 0))
                 if out.shape[0] == 1:
                     re_img = out.squeeze(0)
-                s_map = ssim_seg_mvtec(ori_img, re_img, configs, win_size=3, gaussian_weights=True)
-                if threshold_seg_dict: # dict is not empty
-                    mask = seg_mask_mvtec(s_map, threshold_seg_dict[item],configs)
+                re_imgs = [cv2.GaussianBlur(re_img, (k, k), 0, 0) for k in (5, 11, 21)]
+                re_imgs.append(re_img)
+                s_maps = []
+                for re_img in re_imgs:
+                    s_map = ssim_seg_mvtec(ori_img, re_img, configs, win_size=5, gaussian_weights=True)
+                    s_maps.append(s_map[np.newaxis, :, :])
+                s_maps = np.concatenate(s_maps, axis=0)
+                s_map = np.max(s_maps, axis=0)
+                # thr = (np.max(s_map) + np.min(s_map)) / 2 * 255
+                if threshold_seg_dict:  # dict is not empty
+                    mask = seg_mask_mvtec(s_map, threshold_seg_dict[item], configs)
                 else:
-                    mask = seg_mask_mvtec(s_map, 64, configs)
+                    mask = seg_mask_mvtec(s_map, 180, configs)
                 inference_time = _t.toc()
                 img_id = path.split('/')[-1].split('.')[0]
                 progressbar.set_description('Image: {}'.format(img_id))
                 cv2.imwrite(os.path.join(save_dir, item, 'ori', type, '{}.png'.format(img_id)), ori_img)
                 cv2.imwrite(os.path.join(save_dir, item, 'gen', type, '{}.png'.format(img_id)), re_img)
                 cv2.imwrite(os.path.join(save_dir, item, 'mask', type, '{}.png'.format(img_id)), mask)
+                cv2.imwrite(os.path.join(save_dir, item, 'concat', type, '{}.png'.format(img_id)),
+                            np.concatenate([ori_img, re_img, s_map * 255, mask], axis=0))
                 _time.append(inference_time)
+
+                points = np.argwhere(mask == 255)
+                if len(points) > 4:
+                    test_result['Height'] = 128
+                    test_result['Width'] = 128
+                    test_result['name'] = img_id + '.bmp'
+                    test_result['regions'] = []
+                    p_ = ['{:d}, {:d}'.format(i[0], i[1]) for i in points]
+                    p_ = {'points': p_}
+                    test_result['regions'].append(p_)
+                    with open(os.path.join(save_dir, item, 'submit_result', type, '{}.json'.format(img_id)), 'w') as f:
+                        json.dump(test_result, f)
+
                 if type != 'good':
-                    s_map_bad=s_map.reshape(-1,1)
+                    s_map_bad = s_map.reshape(-1, 1)
                     s_map_list.append(s_map_bad)
                 else:
                     s_map_good = s_map.reshape(-1, 1)
                     s_map_good_list.append(s_map_good)
             cost_time += _time
             mean_time = np.array(_time).mean()
-            print('Evaluate: Item:{}; Type:{}; Mean time:{:.1f}ms'.format(item, type, mean_time*1000))
+            print('Evaluate: Item:{}; Type:{}; Mean time:{:.1f}ms'.format(item, type, mean_time * 1000))
             _t.clear()
         torch.save(s_map_list, os.path.join(save_dir, item) + '/s_map.pth')
         torch.save(s_map_good_list, os.path.join(save_dir, item) + '/s_map_good.pth')
@@ -120,21 +158,21 @@ def test_mvtec(test_set, rebuilder, transform, save_dir, threshold_seg_dict, con
     cost_time = np.array(cost_time)
     cost_time = np.sort(cost_time)
     num = cost_time.shape[0]
-    num90 = int(num*0.9)
+    num90 = int(num * 0.9)
     cost_time = cost_time[0:num90]
     mean_time = np.mean(cost_time)
-    print('Mean_time: {:.1f}ms'.format(mean_time*1000))
+    print('Mean_time: {:.1f}ms'.format(mean_time * 1000))
 
     # evaluate results
-    print('Evaluating...')
-    test_set.eval(save_dir)
+    # print('Evaluating...')
+    # test_set.eval(save_dir)
 
 
 def test_chip(test_set, rebuilder, transform, save_dir, configs):
     _t = Timer()
     cost_time = list()
-    iou_list={}
-    s_map_list=list()
+    iou_list = {}
+    s_map_list = list()
     for type in test_set.test_dict:
         img_list = test_set.test_dict[type]
         if not os.path.exists(os.path.join(save_dir, type)):
@@ -142,10 +180,10 @@ def test_chip(test_set, rebuilder, transform, save_dir, configs):
             os.mkdir(os.path.join(save_dir, type, 'ori'))
             os.mkdir(os.path.join(save_dir, type, 'gen'))
             os.mkdir(os.path.join(save_dir, type, 'mask'))
-        if not os.path.exists(os.path.join(save_dir, type,'ROC_curve')):
+        if not os.path.exists(os.path.join(save_dir, type, 'ROC_curve')):
             os.mkdir(os.path.join(save_dir, type, 'ROC_curve'))
         for k, path in enumerate(img_list):
-            name= path.split('/')[-1]
+            name = path.split('/')[-1]
             image = cv2.imread(path, cv2.IMREAD_GRAYSCALE)
             _t.tic()
             ori_img, input_tensor = transform(image)
@@ -154,14 +192,14 @@ def test_chip(test_set, rebuilder, transform, save_dir, configs):
             s_map = ssim_seg(ori_img, re_img, win_size=11, gaussian_weights=True)
             _h, _w = image.shape
             s_map_save = cv2.resize(s_map, (_w, _h))
-            s_map_list.append(s_map_save.reshape(-1,1))
+            s_map_list.append(s_map_save.reshape(-1, 1))
             mask = seg_mask(s_map, threshold=128)
             inference_time = _t.toc()
             if configs['db']['resize'] == [832, 832]:
-                #cat_img = np.concatenate((ori_img[32:-32,32:-32], re_img[32:-32,32:-32], mask[32:-32,32:-32]), axis=1)
-                cv2.imwrite(os.path.join(save_dir, type, 'ori', 'mask{:d}.png'.format(k)), ori_img[32:-32,32:-32])
-                cv2.imwrite(os.path.join(save_dir, type, 'gen', 'mask{:d}.png'.format(k)), re_img[32:-32,32:-32])
-                cv2.imwrite(os.path.join(save_dir, type, 'mask', 'mask{:d}.png'.format(k)), mask[32:-32,32:-32])
+                # cat_img = np.concatenate((ori_img[32:-32,32:-32], re_img[32:-32,32:-32], mask[32:-32,32:-32]), axis=1)
+                cv2.imwrite(os.path.join(save_dir, type, 'ori', 'mask{:d}.png'.format(k)), ori_img[32:-32, 32:-32])
+                cv2.imwrite(os.path.join(save_dir, type, 'gen', 'mask{:d}.png'.format(k)), re_img[32:-32, 32:-32])
+                cv2.imwrite(os.path.join(save_dir, type, 'mask', 'mask{:d}.png'.format(k)), mask[32:-32, 32:-32])
             elif configs['db']['resize'] == [768, 768]:
                 cv2.imwrite(os.path.join(save_dir, type, 'ori', 'mask{:d}.png'.format(k)), ori_img)
                 cv2.imwrite(os.path.join(save_dir, type, 'gen', 'mask{:d}.png'.format(k)), re_img)
@@ -172,34 +210,37 @@ def test_chip(test_set, rebuilder, transform, save_dir, configs):
                 cv2.imwrite(os.path.join(save_dir, type, 'mask', name), mask)
             else:
                 raise Exception("invaild image size")
-            #cv2.imwrite(os.path.join(save_dir, type, '{:d}.png'.format(k)), cat_img)
+            # cv2.imwrite(os.path.join(save_dir, type, '{:d}.png'.format(k)), cat_img)
             cost_time.append(inference_time)
-            if (k+1) % 20 == 0:
-                print('{}th image, cost time: {:.1f}'.format(k+1, inference_time*1000))
+            if (k + 1) % 20 == 0:
+                print('{}th image, cost time: {:.1f}'.format(k + 1, inference_time * 1000))
             _t.clear()
-        torch.save(s_map_list,os.path.join(save_dir) + '/s_map.pth')
+        torch.save(s_map_list, os.path.join(save_dir) + '/s_map.pth')
     # calculate mean time
     cost_time = np.array(cost_time)
     cost_time = np.sort(cost_time)
     num = cost_time.shape[0]
-    num90 = int(num*0.9)
+    num90 = int(num * 0.9)
     cost_time = cost_time[0:num90]
     mean_time = np.mean(cost_time)
-    print('Mean_time: {:.1f}ms'.format(mean_time*1000))
+    print('Mean_time: {:.1f}ms'.format(mean_time * 1000))
     test_set.eval(save_dir)
 
 
 if __name__ == '__main__':
     args = parse_args()
+    DATETIME = datetime.strftime(datetime.now(), '%Y-%m%d-%H%M')
+    result_dir = os.path.join(args.res_dir, DATETIME)
+    if not os.path.exists(result_dir):
+        os.makedirs(result_dir)
 
     # load config file
-    cfg_file = os.path.join('./config', args.cfg)
+    cfg_file = os.path.join('../config', args.cfg)
     with open(cfg_file, "r") as f:
         configs = json.load(f)
 
     if not os.path.exists(args.res_dir):
         os.mkdir(args.res_dir)
-
 
     # load data set
     test_set = load_data_set_from_factory(configs, 'test')
@@ -228,8 +269,8 @@ if __name__ == '__main__':
     print('Start Testing... ')
     if configs['db']['name'] == 'mvtec':
         threshold_seg_dict = val_mvtec(rebuilder, transform, configs)
-        test_mvtec(test_set, rebuilder, transform, args.res_dir, threshold_seg_dict, configs)
+        test_mvtec(test_set, rebuilder, transform, result_dir, threshold_seg_dict, configs)
     elif configs['db']['name'] == 'chip':
-        test_chip(test_set, rebuilder, transform, args.res_dir, configs)
+        test_chip(test_set, rebuilder, transform, result_dir, configs)
     else:
         raise Exception("Invalid set name")

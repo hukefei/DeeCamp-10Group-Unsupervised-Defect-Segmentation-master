@@ -1,7 +1,7 @@
 {
     "model": {
-        "name": "SSIM_Net_upsam",
-        "type": "Encoder",
+        "name": "STM",
+        "type": "MEM",
         "code_dim": 256,
         "img_channel": 1,
         "fp16": false
@@ -10,29 +10,28 @@
         "loss": "Multi_SSIM_loss",
         "window_size":[3, 7, 15],
         "start_epoch": 0,
-        "max_epoch": 200,
+        "max_epoch": 18,
         "snapshot": 10,
-        "learning_rate": 1e-3,
+        "learning_rate": 1e-5,
         "decay_rate": 10,
-        "epoch_steps": [100, 150]
+        "epoch_steps": [12, 15]
     },
     "db": {
-        "name": "mvtec",
-        "data_dir": "/data/sdv2/normal_based/focusight1_round1_train_part1/mvtec",
+        "name": "memory",
+        "data_dir": "/data/sdv2/normal_based/focusight1_round1_train_part1",
         "loader_threads": 4,
-        "train_split": "train",
+        "train_split": "OK_Images",
         "use_validation_set": false,
-        "validation_split": "val",
-        "val_split": "test",
-        "resize": [128, 128],
-        "batch_size": 32,
-        "img_channel": 1
+        "validation_split": "TC_images",
+        "test_split": "TC_images",
+        "resize": [512, 512],
+        "batch_size": 2
     },
     "system": {
         "resume": false,
         "resume_path": "",
         "finetune": false,
         "finetune_path": "",
-        "save_dir": "./weights/SSIM1"
+        "save_dir": "./weights/STM1"
     }
 }
