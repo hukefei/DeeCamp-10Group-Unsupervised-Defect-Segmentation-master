@@ -10,11 +10,11 @@
         "loss": "Multi_SSIM_loss",
         "window_size":[3, 7, 15],
         "start_epoch": 0,
-        "max_epoch": 18,
+        "max_epoch": 100,
         "snapshot": 10,
         "learning_rate": 1e-5,
         "decay_rate": 10,
-        "epoch_steps": [12, 15]
+        "epoch_steps": [60, 80]
     },
     "db": {
         "name": "memory",
@@ -24,8 +24,8 @@
         "use_validation_set": false,
         "validation_split": "TC_images",
         "test_split": "TC_images",
-        "resize": [512, 512],
-        "batch_size": 2
+        "resize": [128, 128],
+        "batch_size": 32
     },
     "system": {
         "resume": false,

@@ -1,6 +1,6 @@
 {
     "model": {
-        "name": "SSIM_Net_upsam",
+        "name": "RED_Net_2skips",
         "type": "Encoder",
         "code_dim": 256,
         "img_channel": 1,
@@ -10,11 +10,11 @@
         "loss": "Multi_SSIM_loss",
         "window_size":[3, 7, 15],
         "start_epoch": 0,
-        "max_epoch": 200,
+        "max_epoch": 20,
         "snapshot": 10,
         "learning_rate": 1e-3,
         "decay_rate": 10,
-        "epoch_steps": [100, 150]
+        "epoch_steps": [10, 15]
     },
     "db": {
         "name": "mvtec",
@@ -22,7 +22,7 @@
         "loader_threads": 4,
         "train_split": "train",
         "use_validation_set": false,
-        "validation_split": "val",
+        "validation_split": "test",
         "val_split": "test",
         "resize": [128, 128],
         "batch_size": 32,

@@ -288,7 +288,8 @@ class STM(nn.Module):
     def __init__(self):
         super(STM, self).__init__()
         self.Encoder_M = Encoder_M()
-        self.Encoder_Q = Encoder_Q()
+        # self.Encoder_Q = Encoder_Q()
+        self.Encoder_Q = self.Encoder_M
 
         self.KV_M_r4 = KeyValue(1024, keydim=128, valdim=512)
         self.KV_Q_r4 = KeyValue(1024, keydim=128, valdim=512)
@@ -338,25 +339,6 @@ class STM(nn.Module):
         '''
         # print('&&&&&&&&&', curMask.shape, curFrame.shape)
         r4, _, _, _, _, x = self.Encoder_M(curFrame)
-        # r4 = r4.detach().cpu().numpy()
-        # print('r4.shape', r4.shape)
-        #
-        # file_name = './exp/pretrained/tf/encoder_m/dogs_jump_1_frame1/'
-        #
-        #
-        # if not os.path.exists(file_name):
-        #     os.makedirs(file_name)
-        # np.save('./exp/pretrained/tf/encoder_m/dogs_jump_1_frame1.npy', r4)
-        # sns.set()
-        # for c in range(len(r4[0])):
-        #     if c>300:
-        #         break
-        #     plt.clf()
-        #     ax = sns.heatmap(r4[0, c])
-        #     plt.savefig(file_name+'{:05d}.png'.format(c))
-        # sys.exit()
-
-        # print('******r4', r4.device)
         k4, v4 = self.KV_M_r4(r4)  # num_objects, 128 and 512, H/16, W/16
         return k4, v4
 
