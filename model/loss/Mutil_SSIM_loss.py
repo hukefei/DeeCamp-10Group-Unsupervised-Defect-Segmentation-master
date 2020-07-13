@@ -74,12 +74,12 @@ class Multi_SSIM_loss(nn.Module):
         for size in window_sizes:
             self.losses.append(SSIM_loss(size, channel, size_average))
         self.losses = nn.ModuleList(self.losses)
-        self.mse_loss = nn.MSELoss(reduction='mean')
+        # self.l1_loss = nn.L1Loss(reduction='mean')
 
     def forward(self, img1, img2):
         loss_multi = list()
         for i in range(len(self.losses)):
             loss_multi.append(self.losses[i](img1, img2))
-        # loss_multi.append(self.mse_loss(img1, img2))
+        # loss_multi.append(self.l1_loss(img1, img2))
 
         return loss_multi

@@ -6,3 +6,5 @@ from .VAE_loss import VAE_loss
 # GAN
 from .SRGAN_loss import GeneratorLoss as SRGAN_Gloss
 from .SRGAN_loss import DiscriminatorLoss as SRGAN_Dloss
+
+from .Perceptual_loss import Perceptual_loss

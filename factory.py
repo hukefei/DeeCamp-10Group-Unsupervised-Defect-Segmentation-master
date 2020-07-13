@@ -1,5 +1,6 @@
 import torch
 import torchvision as tv
+from db.defect import *
 
 
 def load_params(net, path):
@@ -31,8 +32,15 @@ def load_data_set_from_factory(configs, phase):
                 preproc = None
             else:
                 raise Exception("Invalid phase name")
+            transforms = tv.transforms.Compose([
+                tv.transforms.Resize(tuple(configs['db']['resize'])),
+                DefectAdder(mode='geometry', defect_shape=('line',), normal_only=True),
+                ToGrayList(),
+                ToTensorList(),
+                NormalizeList([0.5], [0.5]),
+            ])
             set = MVTEC_with_val(root=configs['db']['data_dir'], resize=tuple(configs['db']['resize']), set=set_name,
-                                 preproc=preproc,
+                                 preproc=transforms,
                                  img_channel=configs['db']['img_channel'])
         elif configs['db']['use_validation_set'] == False:
             from db import MVTEC_pre, MVTEC
@@ -46,8 +54,14 @@ def load_data_set_from_factory(configs, phase):
                 preproc = None
             else:
                 raise Exception("Invalid phase name")
+            transforms = tv.transforms.Compose([
+                tv.transforms.Resize(tuple(configs['db']['resize'])),
+                DefectAdder(mode='geometry', defect_shape=('line',)),
+                ToTensorList(),
+                NormalizeList([0.5], [0.5]),
+            ])
             set = MVTEC(root=configs['db']['data_dir'], resize=tuple(configs['db']['resize']), set=set_name,
-                        preproc=preproc,
+                        preproc=transforms,
                         img_channel=configs['db']['img_channel'])  ####################################
         else:
             raise Exception("Invalid input")
@@ -93,6 +107,13 @@ def load_training_net_from_factory(configs):
     if configs['model']['name'] == 'SSIM_Net_upsam':
         from model.networks import SSIM_Net_upsam
         net = SSIM_Net_upsam(code_dim=configs['model']['code_dim'], img_channel=configs['model']['img_channel'])
+        optimizer = torch.optim.Adam(net.parameters(), lr=configs['op']['learning_rate'], betas=(0.5, 0.999))
+
+        return net, optimizer
+
+    if configs['model']['name'] == 'SSIM_Net_PL':
+        from model.networks import SSIM_Net_PL
+        net = SSIM_Net_PL(code_dim=configs['model']['code_dim'], img_channel=configs['model']['img_channel'])
         optimizer = torch.optim.Adam(net.parameters(), lr=configs['op']['learning_rate'], betas=(0.5, 0.999))
 
         return net, optimizer
@@ -171,9 +192,21 @@ def load_loss_from_factory(configs):
 
         return loss
 
+    elif configs['op']['loss'] == 'pl_ssim_loss':
+        from model.loss import Multi_SSIM_loss
+        loss = Multi_SSIM_loss(window_sizes=configs['op']['window_size'], channel=configs['model']['img_channel'])
+
+        return loss
+
     elif configs['op']['loss'] == 'VAE_loss':
         from model.loss import VAE_loss
         loss = VAE_loss()
+
+        return loss
+
+    elif configs['op']['loss'] == 'Perceptual_loss':
+        from model.loss import Perceptual_loss
+        loss = Perceptual_loss()
 
         return loss
 
@@ -223,6 +256,9 @@ def load_test_model_from_factory(configs):
     elif configs['model']['name'] == 'SSIM_Net_upsam':
         from model.networks import SSIM_Net_upsam
         net = SSIM_Net_upsam(code_dim=configs['model']['code_dim'], img_channel=configs['model']['img_channel'])
+    elif configs['model']['name'] == 'SSIM_Net_PL':
+        from model.networks import SSIM_Net_PL
+        net = SSIM_Net_PL(code_dim=configs['model']['code_dim'], img_channel=configs['model']['img_channel'])
     elif configs['model']['name'] == 'RED_Net_2skips':
         from model.networks import RED_Net_2skips
         net = RED_Net_2skips(code_dim=configs['model']['code_dim'], img_channel=configs['model']['img_channel'])

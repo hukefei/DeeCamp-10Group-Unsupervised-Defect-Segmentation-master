@@ -59,3 +59,13 @@ class Rebuilder:
         out = out.astype(np.uint8)
         return out
 
+    def res(self, input_tensor):
+        with torch.no_grad():
+            input_tensor = input_tensor.cuda(self.gpu_id)
+            if self.fp16 is True:
+                input_tensor = input_tensor.half()
+            out = self.network(input_tensor)
+
+        res = self.net.res(out, input_tensor)
+        return res
+

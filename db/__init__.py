@@ -21,8 +21,12 @@ def training_collate(batch):
     # for img in batch:
     #     _c, _h, _w = img.shape
     #     imgs.append(img.view(1, _c, _h, _w))
-
-    return torch.stack(batch, 0)
+    if isinstance(batch[0], torch.Tensor):
+        return torch.stack(batch, 0)
+    elif isinstance(batch[0], list):
+        a = [x[0] for x in batch]
+        b = [x[1] for x in batch]
+        return [torch.stack(a, 0), torch.stack(b, 0)]
 
 
 class Transform(object):

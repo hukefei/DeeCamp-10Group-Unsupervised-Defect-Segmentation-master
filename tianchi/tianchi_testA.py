@@ -88,12 +88,12 @@ def test_mvtec(test_set, rebuilder, transform, save_dir, threshold_seg_dict, con
             _time = list()
             img_list = item_dict[type]
             progressbar = tqdm.tqdm(img_list)
-            # count = 0
+            count = 0
             for path in progressbar:
-                # if count >= 100:
-                #     return 0
-                # else:
-                #     count += 1
+                if count >= 100:
+                    return 0
+                else:
+                    count += 1
                 # path = r'/data/sdv2/normal_based/focusight1_round1_train_part1/mvtec/tianchi/test/TC_images/zzcRTAzGLsu2pcgCXoW1OYY3chIBm2.bmp'
                 test_result = {}
                 # image = cv2.imread(path, cv2.IMREAD_COLOR)
@@ -103,22 +103,25 @@ def test_mvtec(test_set, rebuilder, transform, save_dir, threshold_seg_dict, con
                 _t.tic()
                 ori_img, input_tensor = transform(image)
                 out = rebuilder.inference(input_tensor)
+                res = rebuilder.res(input_tensor)
+                res = (res - res.min()) / (res.max() - res.min())
                 # re_img = out.transpose((1, 2, 0))
                 if out.shape[0] == 1:
                     re_img = out.squeeze(0)
                 re_imgs = [cv2.GaussianBlur(re_img, (k, k), 0, 0) for k in (5, 11, 21)]
                 re_imgs.append(re_img)
                 s_maps = []
-                for re_img in re_imgs:
-                    s_map = ssim_seg_mvtec(ori_img, re_img, configs, win_size=5, gaussian_weights=True)
+                for re_ in re_imgs:
+                    s_map = ssim_seg_mvtec(ori_img, re_, configs, win_size=5, gaussian_weights=True)
                     s_maps.append(s_map[np.newaxis, :, :])
                 s_maps = np.concatenate(s_maps, axis=0)
                 s_map = np.max(s_maps, axis=0)
-                # thr = (np.max(s_map) + np.min(s_map)) / 2 * 255
+
                 if threshold_seg_dict:  # dict is not empty
                     mask = seg_mask_mvtec(s_map, threshold_seg_dict[item], configs)
                 else:
                     mask = seg_mask_mvtec(s_map, 180, configs)
+
                 inference_time = _t.toc()
                 img_id = path.split('/')[-1].split('.')[0]
                 progressbar.set_description('Image: {}'.format(img_id))
@@ -126,7 +129,7 @@ def test_mvtec(test_set, rebuilder, transform, save_dir, threshold_seg_dict, con
                 cv2.imwrite(os.path.join(save_dir, item, 'gen', type, '{}.png'.format(img_id)), re_img)
                 cv2.imwrite(os.path.join(save_dir, item, 'mask', type, '{}.png'.format(img_id)), mask)
                 cv2.imwrite(os.path.join(save_dir, item, 'concat', type, '{}.png'.format(img_id)),
-                            np.concatenate([ori_img, re_img, s_map * 255, mask], axis=0))
+                            np.concatenate([ori_img, re_img, s_map * 255, res * 255, mask], axis=0))
                 _time.append(inference_time)
 
                 points = np.argwhere(mask == 255)
@@ -261,6 +264,7 @@ if __name__ == '__main__':
     else:
         raise Exception("invalid set name")
     net = load_test_model_from_factory(configs)
+    loss = load_loss_from_factory(configs)
     rebuilder = Rebuilder(net, gpu_id=args.gpu_id)
     rebuilder.load_params(args.model_path)
     print('Model: {} has been loaded'.format(configs['model']['name']))

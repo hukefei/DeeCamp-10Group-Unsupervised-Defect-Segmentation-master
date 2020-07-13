@@ -1,38 +1,48 @@
 {
-    "model": {
-        "name": "RED_Net_2skips",
-        "type": "Encoder",
-        "code_dim": 256,
-        "img_channel": 1,
-        "fp16": false
-    },
-    "op": {
-        "loss": "Multi_SSIM_loss",
-        "window_size":[3, 7, 15],
-        "start_epoch": 0,
-        "max_epoch": 20,
-        "snapshot": 10,
-        "learning_rate": 1e-3,
-        "decay_rate": 10,
-        "epoch_steps": [10, 15]
-    },
-    "db": {
-        "name": "mvtec",
-        "data_dir": "/data/sdv2/normal_based/focusight1_round1_train_part2/mvtec",
-        "loader_threads": 4,
-        "train_split": "train",
-        "use_validation_set": false,
-        "validation_split": "test",
-        "val_split": "test",
-        "resize": [128, 128],
-        "batch_size": 32,
-        "img_channel": 1
-    },
-    "system": {
-        "resume": false,
-        "resume_path": "",
-        "finetune": false,
-        "finetune_path": "",
-        "save_dir": "./weights/SSIM2"
-    }
+  "model": {
+    "name": "SSIM_Net_PL",
+    "type": "Encoder",
+    "code_dim": 256,
+    "img_channel": 1,
+    "fp16": false
+  },
+  "op": {
+    "loss": "pl_ssim_loss",
+    "window_size": [
+      3,
+      7,
+      15
+    ],
+    "start_epoch": 0,
+    "max_epoch": 200,
+    "snapshot": 20,
+    "learning_rate": 1e-3,
+    "decay_rate": 10,
+    "epoch_steps": [
+      120,
+      170
+    ]
+  },
+  "db": {
+    "name": "mvtec",
+    "data_dir": "/data/sdv2/project_hkf/dataset/competetion_unsupervised_defect_segmentation/focusight1_round1_train_part2/mvtec",
+    "loader_threads": 4,
+    "train_split": "train",
+    "use_validation_set": false,
+    "validation_split": "test",
+    "val_split": "test",
+    "resize": [
+      128,
+      128
+    ],
+    "batch_size": 32,
+    "img_channel": 1
+  },
+  "system": {
+    "resume": false,
+    "resume_path": "",
+    "finetune": false,
+    "finetune_path": "",
+    "save_dir": "./weights/SSIM2-RED_Net_4skips-100e"
+  }
 }

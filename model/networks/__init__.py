@@ -15,3 +15,5 @@ from .SRGAN.vgg16 import VGG16
 
 #MEM
 from .MEM.mem_net import STM
+
+from .SSIM.ssim_upsam_pl import SSIM_Net_PL

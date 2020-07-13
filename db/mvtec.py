@@ -11,6 +11,7 @@ import torch.utils.data as data
 from collections import OrderedDict
 from .augment import *
 from .eval_func import *
+from PIL import Image
 
 
 class Preproc(object):
@@ -281,10 +282,11 @@ class MVTEC(data.Dataset):
         """Returns training image
         """
         img_path = self.ids[index]
-        if self.img_channel == 3:
-            img = cv2.imread(img_path, cv2.IMREAD_COLOR)
-        elif self.img_channel == 1:
-            img = cv2.imread(img_path, 0)
+        # if self.img_channel == 3:
+        #     img = cv2.imread(img_path, cv2.IMREAD_COLOR)
+        # elif self.img_channel == 1:
+        #     img = cv2.imread(img_path, 0)
+        img = Image.open(img_path)
 
         if self.preproc is not None:
             img = self.preproc(img)
